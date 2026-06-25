@@ -5,24 +5,29 @@ def test_build_dashboard_spec_includes_chart_and_text_widgets() -> None:
     spec = build_dashboard_spec(
         DashboardDraft.model_validate(
             {
-                "title": "Sales",
+                "name": "Sales",
                 "workbook_id": "wb1",
-                "charts": [
+                "items": [
                     {
-                        "title": "Revenue",
-                        "chart_id": "chart1",
+                        "item": {
+                            "id": "chart1",
+                            "namespace": "default",
+                            "type": "widget",
+                            "widgetId": "chart-entry-id",
+                        },
                         "x": 0,
                         "y": 0,
-                        "width": 12,
-                        "height": 8,
+                        "w": 12,
+                        "h": 8,
                     }
                 ],
-                "texts": [{"text": "# Sales dashboard", "x": 0, "y": 8}],
             }
         )
     )
 
-    assert spec["title"] == "Sales"
-    assert spec["workbookId"] == "wb1"
-    assert spec["widgets"][0]["source"]["entryId"] == "chart1"
-    assert spec["widgets"][1]["content"] == "# Sales dashboard"
+    assert spec["mode"] == "save"
+    assert spec["entry"]["name"] == "Sales"
+    assert spec["entry"]["workbookId"] == "wb1"
+    assert spec["entry"]["data"]["schemeVersion"] == 8
+    assert spec["entry"]["data"]["tabs"][0]["items"][0]["widgetId"] == "chart-entry-id"
+    assert spec["entry"]["data"]["tabs"][0]["layout"][0]["i"] == "chart1"

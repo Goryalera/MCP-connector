@@ -1,79 +1,83 @@
 from __future__ import annotations
 
+from secrets import token_hex
 from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
 
-class ChartDraft(BaseModel):
-    title: str
-    chart_id: str = Field(description="Existing DataLens chart/entry id")
+class DashboardItemDraft(BaseModel):
+    item: dict[str, Any] = Field(description="Native DataLens dashboard tab item")
     x: int = 0
     y: int = 0
-    width: int = 12
-    height: int = 8
-
-
-class TextDraft(BaseModel):
-    text: str
-    x: int = 0
-    y: int = 0
-    width: int = 12
-    height: int = 3
+    w: int = 12
+    h: int = 8
+    parent: str = ""
 
 
 class DashboardDraft(BaseModel):
-    title: str
-    workbook_id: str | None = None
-    collection_id: str | None = None
+    name: str
+    workbook_id: str
+    key: str = ""
     description: str = ""
-    charts: list[ChartDraft] = Field(default_factory=list)
-    texts: list[TextDraft] = Field(default_factory=list)
-    layout_type: Literal["grid"] = "grid"
+    mode: Literal["save", "publish"] = "save"
+    tab_title: str = "Main"
+    items: list[DashboardItemDraft] = Field(default_factory=list)
+    meta: dict[str, Any] | None = None
+    support_description: str = ""
+    access_description: str = ""
 
 
 def build_dashboard_spec(draft: DashboardDraft) -> dict[str, Any]:
-    widgets: list[dict[str, Any]] = []
+    items: list[dict[str, Any]] = []
+    layout: list[dict[str, Any]] = []
 
-    for chart in draft.charts:
-        widgets.append(
-            {
-                "type": "chart",
-                "title": chart.title,
-                "source": {"entryId": chart.chart_id},
-                "layout": {
-                    "x": chart.x,
-                    "y": chart.y,
-                    "width": chart.width,
-                    "height": chart.height,
-                },
-            }
-        )
+    for index, draft_item in enumerate(draft.items, start=1):
+        item = dict(draft_item.item)
+        item.setdefault("id", f"item-{index}")
+        items.append(item)
 
-    for text in draft.texts:
-        widgets.append(
-            {
-                "type": "text",
-                "content": text.text,
-                "layout": {
-                    "x": text.x,
-                    "y": text.y,
-                    "width": text.width,
-                    "height": text.height,
-                },
-            }
-        )
+        layout_item: dict[str, Any] = {
+            "i": item["id"],
+            "x": draft_item.x,
+            "y": draft_item.y,
+            "w": draft_item.w,
+            "h": draft_item.h,
+        }
+        if draft_item.parent:
+            layout_item["parent"] = draft_item.parent
+        layout.append(layout_item)
 
-    payload: dict[str, Any] = {
-        "title": draft.title,
-        "description": draft.description,
-        "layoutType": draft.layout_type,
-        "widgets": widgets,
+    entry: dict[str, Any] = {
+        "key": draft.key,
+        "workbookId": draft.workbook_id,
+        "name": draft.name,
+        "meta": draft.meta,
+        "annotation": {"description": draft.description},
+        "data": {
+            "counter": 0,
+            "salt": token_hex(8),
+            "schemeVersion": 8,
+            "tabs": [
+                {
+                    "id": "tab-1",
+                    "title": draft.tab_title,
+                    "items": items,
+                    "layout": layout,
+                    "connections": [],
+                    "aliases": {"default": []},
+                }
+            ],
+            "settings": {
+                "silentLoading": False,
+                "dependentSelectors": True,
+                "globalParams": {},
+                "hideTabs": True,
+                "expandTOC": False,
+            },
+            "supportDescription": draft.support_description,
+            "accessDescription": draft.access_description,
+        },
     }
 
-    if draft.workbook_id:
-        payload["workbookId"] = draft.workbook_id
-    if draft.collection_id:
-        payload["collectionId"] = draft.collection_id
-
-    return payload
+    return {"entry": entry, "mode": draft.mode}
